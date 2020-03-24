@@ -1,21 +1,24 @@
 extern crate bitbit;
+extern crate logos;
 // extern crate iui;
 extern crate png;
-extern crate logos;
 
 use std::borrow::Cow;
+use std::env::args;
+use std::error::Error;
+use std::fs;
+use std::fs::File;
+use std::io::{BufRead, BufReader, Write};
+use std::process::exit;
+
+use crate::tileset::{parse_metatile_config, Tile, TileStorage};
 
 // use iui::controls::{Button, Group, Label, VerticalBox};
 // use iui::prelude::*;
 
-use crate::tileset::{Tile, TileStorage};
-use std::env::args;
-use std::process::exit;
-use std::error::Error;
-
 mod rom;
 mod tileset;
-mod compiler;
+// mod compiler;
 
 const VERSION: &'static str = env!("CARGO_PKG_VERSION");
 
@@ -44,16 +47,41 @@ fn inner_main(args: Vec<String>) -> Result<String, String> {
                     None => return Err("missing output folder".to_string())
                 }.clone();
 
-                if args.len() < 3 {
+                // parse metatiles from file
+                let metatile_definitions = match args.get(2) {
+                    Some(arg) => {
+                        let file = File::open(arg).expect("no such file");
+                        let buf = BufReader::new(file);
+                        let lines: Vec<String> = buf.lines()
+                            .map(|l| l.expect("Could not parse line"))
+                            .collect();
+                        parse_metatile_config(lines)
+                    }
+                    None => return Err("missing metatile file".to_string())
+                }.clone();
+
+                if args.len() < 4 {
                     return Err("missing input tilesets".to_string());
                 }
-                let inputs = &args[2..];
+                let inputs = &args[3..];
 
+                // add the tilesets to our storage
                 let mut storage = TileStorage::new(output_path.clone());
                 for tileset in inputs {
                     storage.add_image(Cow::from(tileset)).unwrap();
                 }
                 storage.output();
+                // build the metatiles
+                let mut metatiles: Vec<u8> = Vec::new();
+                for (metatile_file_name, metatile_id) in metatile_definitions {
+                    let metatile = storage.encoded_metatiles.get(&(metatile_file_name, metatile_id)).unwrap().clone();
+                    metatiles.append(&mut metatile.clone());
+                }
+
+                let path = format!("{}/metatiles.bin", storage.output_folder);
+                fs::remove_file(&path);
+                let mut file = File::create(path).unwrap();
+                file.write_all(&metatiles);
                 return Ok(format!("Tileset and palettes written to {}", output_path).to_string());
             }
             "palette" => {
@@ -73,7 +101,7 @@ fn inner_main(args: Vec<String>) -> Result<String, String> {
                         Ok(format!("Palette file written to {}", output).to_string())
                     }
                     Err(error) => Err(format!("error reading palette: {}", error.description()))
-                }
+                };
             }
             _ => {
                 print_help();

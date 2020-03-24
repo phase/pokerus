@@ -3,7 +3,10 @@ use std::io;
 use std::io::BufRead;
 
 fn split(source: String) -> Result<(), String> {
-    let file = File::open(filename)?;
+    let file = match File::open(source) {
+        Ok(f) => f,
+        Err(e) => return Err(e.to_string())
+    };
     let lines: Vec<String> = io::BufReader::new(file).lines().collect();
     let mut scope = 0usize;
     for line in lines {

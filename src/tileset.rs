@@ -1,12 +1,19 @@
-use std::borrow::Cow;
-use std::fs::File;
 use std::{fs, io};
-use std::io::{Write, BufWriter, ErrorKind};
+use std::borrow::Cow;
+use std::collections::HashMap;
+use std::fs::File;
+use std::io::{BufWriter, ErrorKind, Write};
+
 use png::HasParameters;
+
+const METATILE_SIZE: usize = 16;
+const TILE_SIZE: usize = 8;
+
+pub struct Metatile {}
 
 #[derive(Eq, PartialEq)]
 pub struct Tile {
-    pub data: [[u8; 8]; 8]
+    pub data: [[u8; TILE_SIZE]; TILE_SIZE]
 }
 
 impl Tile {
@@ -16,7 +23,7 @@ impl Tile {
         }
     }
 
-    pub fn new(data: [[u8; 8]; 8]) -> Tile {
+    pub fn new(data: [[u8; TILE_SIZE]; TILE_SIZE]) -> Tile {
         Tile {
             data
         }
@@ -52,7 +59,7 @@ impl Tile {
         }
     }
 
-    fn reverse_row(row: [u8; 8]) -> [u8; 8] {
+    fn reverse_row(row: [u8; TILE_SIZE]) -> [u8; TILE_SIZE] {
         [
             row[7],
             row[6],
@@ -75,12 +82,37 @@ impl Tile {
         let other = other.flip_x();
         (self.eq(&other), false, true)
     }
+
+    /*
+    1122
+    1122
+    3344
+    3344
+    */
+    pub fn extract(metatile: [[u8; METATILE_SIZE]; METATILE_SIZE]) -> Vec<Tile> {
+        let mut tiles = Vec::with_capacity(4);
+        for y in 0..2 {
+            for x in 0..2 {
+                let y_start = y * TILE_SIZE;
+                let x_start = x * TILE_SIZE;
+                let mut tile: [[u8; TILE_SIZE]; TILE_SIZE] = Default::default();
+                for ty in 0..TILE_SIZE {
+                    for tx in 0..TILE_SIZE {
+                        tile[ty][tx] = metatile[ty + y_start][tx + x_start];
+                    }
+                }
+                tiles.push(Tile::new(tile));
+            }
+        }
+        tiles
+    }
 }
 
 pub struct TileStorage {
     pub tiles: Vec<Tile>,
     pub palettes: Vec<[[u8; 3]; 16]>,
     pub output_folder: String,
+    pub encoded_metatiles: HashMap<(String, usize), Vec<u8>>,
 }
 
 impl TileStorage {
@@ -92,11 +124,12 @@ impl TileStorage {
             tiles,
             palettes: Vec::new(),
             output_folder,
+            encoded_metatiles: HashMap::new(),
         }
     }
 
     pub fn add_image(&mut self, path: Cow<str>) -> Result<(), String> {
-        let decoder = png::Decoder::new(match File::open(path.into_owned()) {
+        let decoder = png::Decoder::new(match File::open(path.to_string()) {
             Ok(f) => f,
             Err(e) => return Err(e.to_string())
         });
@@ -132,6 +165,7 @@ impl TileStorage {
                 }
             }
             self.add_palette(formatted_palette);
+            let palette_id = self.palettes.len() - 1;
 
             // index the image by splitting it into chunks of (r, g, b) and finding it in the palette
             let mut indexed_image: Vec<u8> = Vec::with_capacity(buf.len());
@@ -140,23 +174,37 @@ impl TileStorage {
                 indexed_image.push(index as u8);
             }
 
-            let sections: Vec<&[u8]> = indexed_image.chunks(8).collect();
-            let max_y = height / 8;
-            let max_x = width / 8;
+            let sections: Vec<&[u8]> = indexed_image.chunks(METATILE_SIZE).collect();
+            let max_y = height as usize / METATILE_SIZE;
+            let max_x = width as usize / METATILE_SIZE;
 
+            // go through all the metatiles
             for y in 0..max_y {
                 for x in 0..max_x {
-                    let mut tile_sections: [[u8; 8]; 8] = Default::default();
-                    let start = x + y * max_x * 8;
-                    for s in 0..8 {
-                        let mut row: [u8; 8] = Default::default();
+                    let mut metatile: [[u8; METATILE_SIZE]; METATILE_SIZE] = Default::default();
+                    let metatile_id = x + y * max_x;
+                    let mut encoded_tiles: Vec<u8> = Vec::with_capacity(4 * 2);
+                    let start = x + y * max_x * METATILE_SIZE;
+                    for s in 0..METATILE_SIZE {
+                        let mut row: [u8; METATILE_SIZE] = Default::default();
                         let row_index = (start + s * max_x) as usize;
                         let row_slice = sections[row_index];
 
                         row.copy_from_slice(row_slice);
-                        tile_sections[s as usize] = row;
+                        metatile[s as usize] = row;
                     }
-                    self.push(Tile::new(tile_sections));
+
+                    let tiles = Tile::extract(metatile);
+                    // encode the tiles now while we have the information
+                    for tile in tiles {
+                        let (tile_id, flip_x, flip_y) = self.push(tile);
+                        let flip_x_bit = if flip_x { 1usize } else { 0 };
+                        let flip_y_bit = if flip_y { 1usize } else { 0 };
+                        let value = ((palette_id & 0xf) << 12) | (flip_y_bit << 11) | (flip_x_bit << 10) | (tile_id & 0x3ff);
+                        encoded_tiles.push((value & 0xff) as u8);
+                        encoded_tiles.push(((value >> 8) & 0xff) as u8);
+                    }
+                    self.encoded_metatiles.insert((path.to_string(), metatile_id), encoded_tiles);
                 }
             }
             Ok(())
@@ -165,7 +213,7 @@ impl TileStorage {
         }
     }
 
-    /// returns the id/index of the tile
+    /// returns the id/index of the tile with flip_x and flip_y
     pub fn push(&mut self, tile: Tile) -> (usize, bool, bool) {
         for (i, other) in self.tiles.iter().enumerate() {
             let (equivalent, flip_x, flip_y) = other.is_equivalent(&tile);
@@ -286,4 +334,33 @@ impl TileStorage {
             i += 1;
         }
     }
+}
+
+pub fn parse_metatile_config(lines: Vec<String>) -> Vec<(String, usize)> {
+    let mut file_map: HashMap<String, String> = HashMap::new();
+    let mut metatile_refs: Vec<(String, usize)> = Vec::new();
+    for line in lines {
+        if line.len() < 3 {
+            continue;
+        }
+        if line.contains('=') {
+            let parts: Vec<&str> = line.split('=').collect();
+            let var = parts.get(0).unwrap().to_string();
+            let value = parts.get(1).unwrap().to_string();
+            file_map.insert(var, value);
+        } else {
+            let metatiles: Vec<&str> = line.split(' ').collect();
+            for metatile in metatiles {
+                let metatile_parts: Vec<&str> = metatile.split(',').collect();
+                let bottom_sheet = file_map.get(&metatile_parts.get(0).unwrap().to_string()).unwrap();
+                let bottom_tile = metatile_parts.get(1).unwrap().to_string().parse::<usize>().unwrap();
+                let top_sheet = file_map.get(&metatile_parts.get(2).unwrap().to_string()).unwrap();
+                let top_tile = metatile_parts.get(3).unwrap().to_string().parse::<usize>().unwrap();
+
+                metatile_refs.push((bottom_sheet.clone(), bottom_tile));
+                metatile_refs.push((top_sheet.clone(), top_tile));
+            }
+        }
+    }
+    metatile_refs
 }
