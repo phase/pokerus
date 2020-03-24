@@ -8,6 +8,7 @@ use png::HasParameters;
 
 const METATILE_SIZE: usize = 16;
 const TILE_SIZE: usize = 8;
+const SECONDARY_PALETTE_OFFSET: usize = 6;
 
 pub struct Metatile {}
 
@@ -113,11 +114,13 @@ pub struct TileStorage {
     pub palettes: Vec<[[u8; 3]; 16]>,
     pub output_folder: String,
     pub encoded_metatiles: HashMap<(String, usize), Vec<u8>>,
+    /// true if it's the primary tileset, false if it's the secondary tileset
+    pub primary: bool,
 }
 
 impl TileStorage {
-    pub fn new(output_folder: String) -> TileStorage {
-        fs::create_dir_all(&output_folder);
+    pub fn new(output_folder: String, primary: bool) -> TileStorage {
+        fs::create_dir_all(format!("{}/palettes/", output_folder));
         let mut tiles = Vec::new();
         tiles.push(Tile::blank());
         TileStorage {
@@ -125,6 +128,7 @@ impl TileStorage {
             palettes: Vec::new(),
             output_folder,
             encoded_metatiles: HashMap::new(),
+            primary,
         }
     }
 
@@ -170,7 +174,7 @@ impl TileStorage {
             // index the image by splitting it into chunks of (r, g, b) and finding it in the palette
             let mut indexed_image: Vec<u8> = Vec::with_capacity(buf.len());
             for color in buf.chunks(3) {
-                let index = indexed_palette.iter().position(|&c| c == color).unwrap();
+                let index = indexed_palette.iter().position(|&c| c == color).expect("couldn't find color in palette when indexing image");
                 indexed_image.push(index as u8);
             }
 
@@ -197,10 +201,15 @@ impl TileStorage {
                     let tiles = Tile::extract(metatile);
                     // encode the tiles now while we have the information
                     for tile in tiles {
-                        let (tile_id, flip_x, flip_y) = self.push(tile);
+                        let (mut tile_id, flip_x, flip_y) = self.push(tile);
+                        if !self.primary {
+                            // secondary tilesets start after the primary tileset loaded in a map
+                            tile_id += 0x200;
+                        }
                         let flip_x_bit = if flip_x { 1usize } else { 0 };
                         let flip_y_bit = if flip_y { 1usize } else { 0 };
-                        let value = ((palette_id & 0xf) << 12) | (flip_y_bit << 11) | (flip_x_bit << 10) | (tile_id & 0x3ff);
+                        let p = if self.primary { palette_id } else { palette_id + SECONDARY_PALETTE_OFFSET };
+                        let value = ((p & 0xf) << 12) | (flip_y_bit << 11) | (flip_x_bit << 10) | (tile_id & 0x3ff);
                         encoded_tiles.push((value & 0xff) as u8);
                         encoded_tiles.push(((value >> 8) & 0xff) as u8);
                     }
@@ -259,7 +268,7 @@ impl TileStorage {
     /// Output palette in .pal format
     pub fn output_palette(palette: &[[u8; 3]; 16], path: String) {
         fs::remove_file(&path); // ignore if fail
-        let mut pal_file = File::create(path).unwrap();
+        let mut pal_file = File::create(path).expect("can't create palette file");
 
         // this must be crlf for gbagfx
         let mut buffer = String::from("JASC-PAL\r\n0100\r\n16\r\n");
@@ -272,19 +281,20 @@ impl TileStorage {
 
     pub fn output(&self) {
         for (i, palette) in self.palettes.iter().enumerate() {
-            let pal_path = format!("{}/{}.pal", self.output_folder, i);
+            let palette_id = if self.primary { i } else { i + SECONDARY_PALETTE_OFFSET };
+            let pal_path = format!("{}/palettes/{}.pal", self.output_folder, format!("{:0>2}", palette_id));
             TileStorage::output_palette(palette, pal_path);
         }
-        let palette = self.palettes.get(0).unwrap(); // will never fail
+        let palette = self.palettes.get(0).expect("palette list is empty"); // will never fail
 
         let width = 128u32;
         let height = 256u32;
         let max_x = width / 8;
         let max_y = height / 8;
 
-        let tileset_path = format!("{}/tileset.png", self.output_folder);
+        let tileset_path = format!("{}/tiles.png", self.output_folder);
         fs::remove_file(&tileset_path);
-        let tileset_file = File::create(tileset_path).unwrap();
+        let tileset_file = File::create(tileset_path).expect("can't create tiles.png");
         let ref mut w = BufWriter::new(tileset_file);
 
         let mut buffer = Vec::with_capacity((width * height) as usize);
@@ -296,12 +306,12 @@ impl TileStorage {
                     if let Some(tile) = self.tiles.get(tile_index) {
                         let row = tile.data[row_index];
                         for palette_index in row.iter() {
-                            bit_writer.write_bits(*palette_index as u32, 4usize).unwrap();
+                            bit_writer.write_bits(*palette_index as u32, 4usize).expect("failed to write tile png bytes");
                         }
                     } else {
                         // blank tile
                         for _ in 0..8 {
-                            bit_writer.write_bits(0, 4usize).unwrap();
+                            bit_writer.write_bits(0, 4usize).expect("failed to write blank tilepng bytes");
                         }
                     }
                 }
@@ -320,7 +330,7 @@ impl TileStorage {
         let mut encoder = png::Encoder::new(w, width, height);
         encoder.set(png::ColorType::Indexed).set(png::BitDepth::Four);
         encoder.set_palette(encoded_palette);
-        let mut writer = encoder.write_header().unwrap();
+        let mut writer = encoder.write_header().expect("failed to write png header");
         writer.write_image_data(buffer.as_slice());
     }
 
@@ -340,22 +350,22 @@ pub fn parse_metatile_config(lines: Vec<String>) -> Vec<(String, usize)> {
     let mut file_map: HashMap<String, String> = HashMap::new();
     let mut metatile_refs: Vec<(String, usize)> = Vec::new();
     for line in lines {
-        if line.len() < 3 {
+        if line.len() < 3 || line.starts_with('#') {
             continue;
         }
         if line.contains('=') {
             let parts: Vec<&str> = line.split('=').collect();
-            let var = parts.get(0).unwrap().to_string();
-            let value = parts.get(1).unwrap().to_string();
+            let var = parts.get(0).expect("no variable name present").to_string();
+            let value = parts.get(1).expect("no variable value present").to_string();
             file_map.insert(var, value);
         } else {
             let metatiles: Vec<&str> = line.split(' ').collect();
             for metatile in metatiles {
                 let metatile_parts: Vec<&str> = metatile.split(',').collect();
-                let bottom_sheet = file_map.get(&metatile_parts.get(0).unwrap().to_string()).unwrap();
-                let bottom_tile = metatile_parts.get(1).unwrap().to_string().parse::<usize>().unwrap();
-                let top_sheet = file_map.get(&metatile_parts.get(2).unwrap().to_string()).unwrap();
-                let top_tile = metatile_parts.get(3).unwrap().to_string().parse::<usize>().unwrap();
+                let bottom_sheet = file_map.get(&metatile_parts.get(0).expect("bottom metatile var doesn't exist").to_string()).expect("bottom metatile var doesn't refer to a real sheet");
+                let bottom_tile = metatile_parts.get(1).expect("bottom metatile index doesn't exist").to_string().parse::<usize>().expect("bottom metatile index isn't a number");
+                let top_sheet = file_map.get(&metatile_parts.get(2).expect("top metatile var doesn't exist").to_string()).expect("top metatile var doesn't refer to a real sheet");
+                let top_tile = metatile_parts.get(3).expect("top metatile index doesn't exist").to_string().parse::<usize>().expect("top metatile index isn't a number");
 
                 metatile_refs.push((bottom_sheet.clone(), bottom_tile));
                 metatile_refs.push((top_sheet.clone(), top_tile));
