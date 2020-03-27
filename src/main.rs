@@ -1,24 +1,27 @@
 extern crate bitbit;
+extern crate iui;
 extern crate logos;
-// extern crate iui;
 extern crate png;
+extern crate fltk;
+extern crate fltk_sys;
 
 use std::borrow::Cow;
 use std::env::args;
 use std::error::Error;
-use std::fs;
+use std::{fs, thread};
 use std::fs::File;
 use std::io::{BufRead, BufReader, Write};
 use std::process::exit;
 
-use crate::tileset::{parse_metatile_config, Tile, TileStorage};
-
 // use iui::controls::{Button, Group, Label, VerticalBox};
 // use iui::prelude::*;
+use fltk::{button::*, frame::*, group::*, input::*, output::*, valuator::*, window::*};
+
+use crate::tileset::{parse_metatile_config, Tile, TileStorage};
+use fltk::dialog::{FileDialog, FileDialogType};
 
 mod rom;
 mod tileset;
-// mod compiler;
 
 const VERSION: &'static str = env!("CARGO_PKG_VERSION");
 
@@ -121,8 +124,7 @@ fn inner_main(args: Vec<String>) -> Result<String, String> {
         }
     } else {
         // no args passed, run gui
-        // main_ui()?;
-        print_help();
+        main_ui()?;
     }
     Ok("".to_string())
 }
@@ -156,54 +158,103 @@ fn main_tileset() {
     println!("Success!\nNature Tiles: {}\nCity Tiles: {}", nature_storage.tiles.len(), city_storage.tiles.len());
 }
 
-// fn main_ui() -> Result<(), String> {
-//     // Initialize the UI library
-//     let ui = UI::init().map_err(|e|  e.to_string())?;
-//     // Create a window into which controls can be placed
-//     let mut win = Window::new(&ui, &format!("Pokerus v{}", VERSION), 700, 600, WindowType::NoMenubar);
-//
-//     // Create a vertical layout to hold the controls
-//     let mut vbox = VerticalBox::new(&ui);
-//     vbox.set_padded(&ui, true);
-//
-//     let mut group_vbox = VerticalBox::new(&ui);
-//     let mut group = Group::new(&ui, "Group");
-//
-//     // Create two buttons to place in the window
-//     let mut button = Button::new(&ui, "Button");
-//     button.on_clicked(&ui, {
-//         let ui = ui.clone();
-//         move |btn| {
-//             btn.set_text(&ui, "Clicked!");
-//         }
-//     });
-//
-//     let mut quit_button = Button::new(&ui, "Quit");
-//     quit_button.on_clicked(&ui, {
-//         let ui = ui.clone();
-//         move |_| {
-//             ui.quit();
-//         }
-//     });
-//
-//     // Create a new label. Note that labels don't auto-wrap!
-//     let mut label_text = String::new();
-//     label_text.push_str("There is a ton of text in this label.\n");
-//     label_text.push_str("Pretty much every unicode character is supported.\n");
-//     label_text.push_str("🎉 用户界面 사용자 인터페이스");
-//     let label = Label::new(&ui, &label_text);
-//
-//     vbox.append(&ui, label, LayoutStrategy::Stretchy);
-//     group_vbox.append(&ui, button, LayoutStrategy::Compact);
-//     group_vbox.append(&ui, quit_button, LayoutStrategy::Compact);
-//     group.set_child(&ui, group_vbox);
-//     vbox.append(&ui, group, LayoutStrategy::Compact);
-//
-//     // Actually put the button in the window
-//     win.set_child(&ui, vbox);
-//     // Show the window
-//     win.show(&ui);
-//     // Run the application
-//     ui.main();
-//     Ok(())
-// }
+fn main_ui() -> Result<(), String> {
+    let app = fl::App::default().set_scheme(AppScheme::Base);
+    let (screen_width, screen_height) = fl::screen_size();
+    let (app_width, app_height) = (900, 700);
+    let mut wind = Window::new(
+        (screen_width / 2.0 - (app_width / 2) as f64) as i32,
+        (screen_height / 2.0 - (app_height / 2) as f64) as i32,
+        app_width,
+        app_height,
+        &format!("Pokerus v{}", VERSION),
+    );
+    let tab_set = Tabs::new(10, 10, app_width - 20, app_height - 20, "");
+
+    {
+        let tileset_tab = Group::new(10, 35, app_width - 20, app_height - 20, "Tileset Merger");
+        tileset_tab.end();
+    }
+
+    {
+        let palette_tab = Group::new(10, 35, app_width - 20, app_height - 20, "Palette Extractor");
+        let mut button = Button::new(60, 60, app_width - 120, app_height - 120,
+                                     "Big Button to Extract a Palette from an indexed .png to a .pal\n\n\
+        really that's it\n\n\
+        look, gimp doesn't have a button for it so I made one\n\n\
+        amazing tool by phase");
+
+        button.set_callback(Box::new(|| {
+            thread::spawn(|| {
+                let mut image_dialog = FileDialog::new(FileDialogType::BrowseFile);
+                image_dialog.set_filter("*.png\x00"); // 0 byte is required
+                image_dialog.show(); // waits for dialog box to close
+                image_dialog.set_title("Choose an indexed image file");
+                let image_file = image_dialog.filename();
+                let mut palette_dialog = FileDialog::new(FileDialogType::BrowseSaveFile);
+                palette_dialog.show(); // waits for dialog box to close
+                let pallete_file = palette_dialog.filename();
+                println!("{} -> {}", image_file, pallete_file);
+            });
+        }));
+        palette_tab.end();
+    }
+
+    tab_set.end();
+    wind.show();
+    app.run().map_err(|e| e.to_string())
+}
+
+/*
+fn main_ui_libui() -> Result<(), String> {
+    // Initialize the UI library
+    let ui = UI::init().map_err(|e| e.to_string())?;
+    // Create a window into which controls can be placed
+    let mut win = Window::new(&ui, &format!("Pokerus v{}", VERSION), 700, 600, WindowType::HasMenubar);
+
+    // Create a vertical layout to hold the controls
+    let mut vbox = VerticalBox::new(&ui);
+    vbox.set_padded(&ui, true);
+
+    let mut group_vbox = VerticalBox::new(&ui);
+    let mut group = Group::new(&ui, "Group");
+
+    // Create two buttons to place in the window
+    let mut button = Button::new(&ui, "Button");
+    button.on_clicked(&ui, {
+        let ui = ui.clone();
+        move |btn| {
+            btn.set_text(&ui, "Clicked!");
+        }
+    });
+
+    let mut quit_button = Button::new(&ui, "Quit");
+    quit_button.on_clicked(&ui, {
+        let ui = ui.clone();
+        move |_| {
+            ui.quit();
+        }
+    });
+
+    // Create a new label. Note that labels don't auto-wrap!
+    let mut label_text = String::new();
+    label_text.push_str("There is a ton of text in this label.\n");
+    label_text.push_str("Pretty much every unicode character is supported.\n");
+    label_text.push_str("🎉 用户界面 사용자 인터페이스");
+    let label = Label::new(&ui, &label_text);
+
+    vbox.append(&ui, label, LayoutStrategy::Stretchy);
+    group_vbox.append(&ui, button, LayoutStrategy::Compact);
+    group_vbox.append(&ui, quit_button, LayoutStrategy::Compact);
+    group.set_child(&ui, group_vbox);
+    vbox.append(&ui, group, LayoutStrategy::Compact);
+
+    // Actually put the button in the window
+    win.set_child(&ui, vbox);
+    // Show the window
+    win.show(&ui);
+    // Run the application
+    ui.main();
+    Ok(())
+}
+*/

@@ -8,7 +8,13 @@ edition = "2018"
 
 [dependencies]
 #iui = "0.3"
-iui = {git = "https://github.com/phase/libui-rs", branch = "master"}
 png = {git = "https://github.com/phase/image-png", branch = "set-palette-for-encoding"}
 bitbit = "0.2.0"
 logos = "0.9.7"
+fltk = "^0.1.13"
+fltk-sys = "^0.1.13"
+
+[dependencies.iui]
+git = "https://github.com/MOZGIII/libui-rs.git"
+rev = "5d526e4d8d817a0736f60835259070ffa58b8b42"
+features = ["static"]
