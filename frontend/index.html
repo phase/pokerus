@@ -20,14 +20,19 @@
     </section>
     <section>
         <h1>Metatile Editor</h1>
+        <button onclick="document.getElementById('import').click();">Import</button>
+        <input id="import" type="file" name="name" style="display: none;"/>
+        <button id="export" type="button">Export</button>
+
         <p>Bottom / Top</p>
         <div class="tilePreview">
             <img id="bottomTile" class="tile">
             <img id="topTile" class="tile">
-<!--            <h1 style="text-align: center; font-size: 2.4em">-></h1>-->
             <span>---------></span>
             <img id="combinedTile" class="tile">
         </div>
+        <br>
+        <div id="metatiles"></div>
     </section>
 </div>
 </body>

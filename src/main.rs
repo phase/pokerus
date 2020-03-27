@@ -74,7 +74,7 @@ fn inner_main(args: Vec<String>) -> Result<String, String> {
                 // add the tilesets to our storage
                 let mut storage = TileStorage::new(output_path.clone(), primary);
                 for tileset in inputs {
-                    storage.add_image(Cow::from(tileset)).expect("failed to add tileset to storage");
+                    storage.add_image(tileset.clone()).expect("failed to add tileset to storage");
                 }
                 storage.output();
                 // build the metatiles
@@ -136,16 +136,16 @@ fn print_help() {
 
 fn main_tileset() {
     let mut nature_storage = TileStorage::new("nature".to_string(), true);
-    nature_storage.add_image(Cow::from("tree_tileset.png")).unwrap();
-    nature_storage.add_image(Cow::from("tileset_input_red.png")).unwrap();
-    nature_storage.add_image(Cow::from("water_tileset.png")).unwrap();
-    nature_storage.add_image(Cow::from("grass_tileset.png")).unwrap();
-    nature_storage.add_image(Cow::from("rock_tileset.png")).unwrap();
+    nature_storage.add_image("tree_tileset.png".to_string()).unwrap();
+    nature_storage.add_image("tileset_input_red.png".to_string()).unwrap();
+    nature_storage.add_image("water_tileset.png".to_string()).unwrap();
+    nature_storage.add_image("grass_tileset.png".to_string()).unwrap();
+    nature_storage.add_image("rock_tileset.png".to_string()).unwrap();
     nature_storage.output();
 
     let mut city_storage = TileStorage::new("city".to_string(), false);
-    city_storage.add_image(Cow::from("houses_tileset.png")).unwrap();
-    city_storage.add_image(Cow::from("gym_tileset.png")).unwrap();
+    city_storage.add_image("houses_tileset.png".to_string()).unwrap();
+    city_storage.add_image("gym_tileset.png".to_string()).unwrap();
     city_storage.output();
 
     println!("Success!\nNature Tiles: {}\nCity Tiles: {}", nature_storage.tiles.len(), city_storage.tiles.len());

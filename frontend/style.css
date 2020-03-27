@@ -44,6 +44,7 @@ section {
 
 .tile {
     width: 95%;
+    height: 95%;
 }
 
 img {
@@ -58,6 +59,19 @@ img {
 
 .tilePreview {
     display: grid;
-    grid-template-columns: 1fr 1fr 1fr 1fr;
-    width: 30%;
+    grid-template-columns: 1fr 1fr 1fr 1fr 1fr;
+    width: 50%;
+}
+
+#metatiles {
+    width: 100%;
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr; /*8 columns*/
+    grid-template-rows: 1fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr; /*16 rows*/
+}
+
+.selected {
+    border-style: solid;
+    border-color: white;
+    border-width: 5px;
 }

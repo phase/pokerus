@@ -5,6 +5,7 @@ use std::fs::File;
 use std::io::{BufWriter, ErrorKind, Write};
 
 use png::HasParameters;
+use std::path::Path;
 
 const METATILE_SIZE: usize = 16;
 const TILE_SIZE: usize = 8;
@@ -132,11 +133,14 @@ impl TileStorage {
         }
     }
 
-    pub fn add_image(&mut self, path: Cow<str>) -> Result<(), String> {
-        let decoder = png::Decoder::new(match File::open(path.to_string()) {
+    pub fn add_image(&mut self, path: String) -> Result<(), String> {
+        let file_name = Path::new(&path).file_name()
+            .expect(&format!("couldn't find file {}", path)).to_string_lossy();
+        let file = match File::open(path.clone()) {
             Ok(f) => f,
             Err(e) => return Err(e.to_string())
-        });
+        };
+        let decoder = png::Decoder::new(file);
 
         let (info, mut reader) = match decoder.read_info() {
             Ok(f) => f,
@@ -213,7 +217,8 @@ impl TileStorage {
                         encoded_tiles.push((value & 0xff) as u8);
                         encoded_tiles.push(((value >> 8) & 0xff) as u8);
                     }
-                    self.encoded_metatiles.insert((path.to_string(), metatile_id), encoded_tiles);
+                    println!("{} {}", file_name, metatile_id);
+                    self.encoded_metatiles.insert((file_name.to_string(), metatile_id), encoded_tiles);
                 }
             }
             Ok(())
