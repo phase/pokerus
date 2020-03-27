@@ -7,8 +7,6 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-#iui = "0.3"
-iui = {git = "https://github.com/phase/libui-rs", branch = "master"}
 png = {git = "https://github.com/phase/image-png", branch = "set-palette-for-encoding"}
 bitbit = "0.2.0"
 logos = "0.9.7"

@@ -1,0 +1,63 @@
+@font-face {
+    font-family: "Manrope";
+    src: url("./fonts/Manrope-Regular.ttf");
+}
+
+@font-face {
+    font-family: "Manrope";
+    src: url("./fonts/Manrope-Bold.ttf");
+    font-weight: bold;
+}
+
+body {
+    font-family: "Manrope", 'Segoe UI', sans-serif;
+    font-size: 1.1em;
+    background-color: #333333;
+    color: #eeeeee;
+    padding-left: 10%;
+    padding-right: 10%;
+}
+
+.content {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+}
+
+section {
+    /*width: 80%;*/
+    /*margin: 10px auto auto;*/
+}
+
+#uploads {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: 1fr 1fr 1fr 1fr 1fr;
+}
+
+.tileset {
+    width: 95%;
+}
+
+.tilesetContainer {
+    width: 100%;
+}
+
+.tile {
+    width: 95%;
+}
+
+img {
+    image-rendering: optimizeSpeed; /* STOP SMOOTHING, GIVE ME SPEED  */
+    image-rendering: -moz-crisp-edges; /* Firefox                        */
+    image-rendering: -o-crisp-edges; /* Opera                          */
+    image-rendering: -webkit-optimize-contrast; /* Chrome (and eventually Safari) */
+    image-rendering: pixelated; /* Chrome */
+    image-rendering: optimize-contrast; /* CSS3 Proposed                  */
+    -ms-interpolation-mode: nearest-neighbor; /* IE8+                           */
+}
+
+.tilePreview {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr 1fr;
+    width: 30%;
+}
