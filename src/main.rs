@@ -1,14 +1,14 @@
 extern crate bitbit;
+extern crate fltk;
+extern crate fltk_sys;
 extern crate iui;
 extern crate logos;
 extern crate png;
-extern crate fltk;
-extern crate fltk_sys;
 
+use std::{fs, thread};
 use std::borrow::Cow;
 use std::env::args;
 use std::error::Error;
-use std::{fs, thread};
 use std::fs::File;
 use std::io::{BufRead, BufReader, Write};
 use std::process::exit;
@@ -16,9 +16,9 @@ use std::process::exit;
 // use iui::controls::{Button, Group, Label, VerticalBox};
 // use iui::prelude::*;
 use fltk::{button::*, frame::*, group::*, input::*, output::*, valuator::*, window::*};
+use fltk::dialog::{FileDialog, FileDialogType, message, input, alert};
 
 use crate::tileset::{parse_metatile_config, Tile, TileStorage};
-use fltk::dialog::{FileDialog, FileDialogType};
 
 mod rom;
 mod tileset;
@@ -185,17 +185,29 @@ fn main_ui() -> Result<(), String> {
         amazing tool by phase");
 
         button.set_callback(Box::new(|| {
-            thread::spawn(|| {
-                let mut image_dialog = FileDialog::new(FileDialogType::BrowseFile);
-                image_dialog.set_filter("*.png\x00"); // 0 byte is required
-                image_dialog.show(); // waits for dialog box to close
-                image_dialog.set_title("Choose an indexed image file");
-                let image_file = image_dialog.filename();
-                let mut palette_dialog = FileDialog::new(FileDialogType::BrowseSaveFile);
-                palette_dialog.show(); // waits for dialog box to close
-                let pallete_file = palette_dialog.filename();
-                println!("{} -> {}", image_file, pallete_file);
-            });
+            let mut image_dialog = FileDialog::new(FileDialogType::BrowseFile);
+            image_dialog.set_filter("*.png"); // 0 byte is required
+            image_dialog.show(); // waits for dialog box to close
+            image_dialog.set_title("Choose an indexed image file");
+            let image_file = image_dialog.filename();
+            if image_file.is_empty() {
+                return;
+            }
+            let mut palette_dialog = FileDialog::new(FileDialogType::BrowseSaveFile);
+            palette_dialog.show(); // waits for dialog box to close
+            let pallete_file = palette_dialog.filename();
+            if pallete_file.is_empty() {
+                return;
+            }
+            println!("{} -> {}", image_file, pallete_file);
+            let output = match TileStorage::read_palette(image_file) {
+                Ok(palette) => {
+                    TileStorage::output_palette(&palette, pallete_file.clone());
+                    format!("Palette file written to {}", pallete_file).to_string()
+                }
+                Err(error) => format!("error reading palette: {}", error.description())
+            };
+            alert(&output);
         }));
         palette_tab.end();
     }
