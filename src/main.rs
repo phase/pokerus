@@ -86,9 +86,9 @@ fn inner_main(args: Vec<String>) -> Result<String, String> {
                 }
 
                 let path = format!("{}/metatiles.bin", storage.output_folder);
-                fs::remove_file(&path);
+                fs::remove_file(&path); // ignore
                 let mut file = File::create(path).expect("failed to create metatiles.bin file");
-                file.write_all(&metatiles);
+                file.write_all(&metatiles).expect("failed to write metatiles to file");
                 return Ok(format!("Tileset and palettes written to {}", output_path).to_string());
             }
             "palette" => {
@@ -132,21 +132,4 @@ fn print_help() {
     println!("    Useful for importing into Porymap.");
     println!("- pokerus palette <image> <output.pal>");
     println!("    Extract the palette of an image to a .pal file.");
-}
-
-fn main_tileset() {
-    let mut nature_storage = TileStorage::new("nature".to_string(), true);
-    nature_storage.add_image("tree_tileset.png".to_string()).unwrap();
-    nature_storage.add_image("tileset_input_red.png".to_string()).unwrap();
-    nature_storage.add_image("water_tileset.png".to_string()).unwrap();
-    nature_storage.add_image("grass_tileset.png".to_string()).unwrap();
-    nature_storage.add_image("rock_tileset.png".to_string()).unwrap();
-    nature_storage.output();
-
-    let mut city_storage = TileStorage::new("city".to_string(), false);
-    city_storage.add_image("houses_tileset.png".to_string()).unwrap();
-    city_storage.add_image("gym_tileset.png".to_string()).unwrap();
-    city_storage.output();
-
-    println!("Success!\nNature Tiles: {}\nCity Tiles: {}", nature_storage.tiles.len(), city_storage.tiles.len());
 }

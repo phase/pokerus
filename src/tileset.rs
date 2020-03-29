@@ -1,17 +1,14 @@
 use std::{fs, io};
-use std::borrow::Cow;
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::{BufWriter, ErrorKind, Write};
+use std::path::Path;
 
 use png::HasParameters;
-use std::path::Path;
 
 const METATILE_SIZE: usize = 16;
 const TILE_SIZE: usize = 8;
 const SECONDARY_PALETTE_OFFSET: usize = 6;
-
-pub struct Metatile {}
 
 #[derive(Eq, PartialEq)]
 pub struct Tile {
@@ -217,7 +214,6 @@ impl TileStorage {
                         encoded_tiles.push((value & 0xff) as u8);
                         encoded_tiles.push(((value >> 8) & 0xff) as u8);
                     }
-                    println!("{} {}", file_name, metatile_id);
                     self.encoded_metatiles.insert((file_name.to_string(), metatile_id), encoded_tiles);
                 }
             }
