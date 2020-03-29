@@ -149,7 +149,7 @@ window.onload = function () {
     }
 
     let metatilesContainer = document.getElementById("metatiles");
-    for (let i = 0; i < 16 * 8; i++) {
+    for (let i = 0; i < 16 * 16 * 2; i++) {
         let canvas = document.createElement("canvas");
         canvas.width = 16;
         canvas.height = 16;
